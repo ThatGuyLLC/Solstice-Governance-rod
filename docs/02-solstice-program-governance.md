@@ -224,6 +224,7 @@ An Orchestrator's application is filed as an issue in this repository. If applic
 A uniqueness rule is fixed by the FIP:
 
 > "Each (payer, operator) pair is bound to at most one orchestrator, so a registration that duplicates an existing binding reverts."
+> Also "an Orchestrator’s controlling wallet must not be a payment channel actor.", this is becasue the f02 rejects payment channels as share recipients.
 
 For Phase 2 (subject to a future FIP): admission becomes permissionless, enabled by a standard attribution-metadata interface specified in a future FIP. The rubric and diligence apply to Phase 1 only.
 
