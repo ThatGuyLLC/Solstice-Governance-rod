@@ -23,7 +23,7 @@ Each section below is a separate page, ordered by its number, so a reader intere
 - The registry of admitted Orchestrators and the change log of program-rule updates.
 - The dispute procedure for contested bindings, and the verification playbook.
 - The versioned reference indexer that recomputes FPV from public settlement events.
-- The durations of `POST_PERIOD` and `VERIFICATION_WINDOW`.
+- Pointers to the FIP-fixed durations of `POST_PERIOD`, `VERIFICATION_WINDOW`, and `EPOCHS_PER_QUARTER` (not edited here; changed only by an SRA code upgrade).
 - The wallet addresses for each tier's Safes.
 - Future issue templates, application forms, and workflow automation.
 
