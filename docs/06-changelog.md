@@ -1,5 +1,11 @@
 # 6. Program Change Log
 
+
+## 2026-09-22 — Align operational docs with FIP-0118
+
+Doc-only correction (Rod review §1): registry actions and cooperative `ReplaceOwner` bind without a hold; `POST_PERIOD` / `VERIFICATION_WINDOW` / `EPOCHS_PER_QUARTER` are FIP deployment-fixed; remove `FinalizeConversion`; clarify share-map no-op, filing-after-bind, pricing/gate parameter names, upgrade hold + `veto(taskId)`, SWA cancel paths, and Orchestrator identity vs payout wallet. No FIP or contract change.
+
+
 > Part of the [Solstice Governance Repository](../README.md). This page is the chronological record of every change to the Solstice program rules — what changed, why, the community issue that raised it, and the resulting FIP (for rule/code changes) or pull request (for repository changes).
 > 
 > The Change Log records every permanent change to this repository, in two categories: (a) governance-tier actions (SRA and SWA) and their associated FIPs, PRs, and network-upgrade announcements; and (b) amendments to the repository's own content — Quarterly Orchestrator Report template and examples, admission rubric, parameters, and any section text.
