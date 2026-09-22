@@ -55,11 +55,11 @@ Informative summary; the lifecycle table in the FIP is normative.
 | Action | Hold | Enforced by | Cancellable by |
 | :-- | :-- | :-- | :-- |
 | Discretionary SWA write to f02 (alter, add, or remove a stream; re-point a Distribution) | `SWA_TIMELOCK`, 7 days (FIP-fixed) | f02 | Either SWA Safe |
-| SWA internal change (Safe replacement, gate parameters, code upgrade) | Internal timelock, equal to the f02 window (FIP-fixed) | SWA | Either SWA Safe |
+| SWA internal change (gate parameters, code upgrade) | Internal timelock, equal to the f02 window (FIP-fixed) | SWA | Either SWA Safe via `veto(taskId)` |
+| Cooperative Safe replacement (`ReplaceOwner`) | None; binds at once | SWA or SRA | Not cancellable |
 | Quarterly gate step | 7-day queue, visibility only | f02 | No one (mechanism-executed) |
 | Registry change (add/remove orchestrator, replace wallet, set admitted lists, set pricing, replace owner) | None; binds at once | SRA | Not cancellable |
-| Registry upgrade | Requires an approved FIP | SRA | Not cancellable |
-| New code upgrade | Requires an approved FIP | SRA | Not cancellable |
+| Registry / code upgrade | Requires an approved FIP; held for `SRA_UPGRADE_HOLD` (20,160 epochs / 7 days) before it binds | SRA | Either SRA Safe via `veto(taskId)` during the hold |
 | CorrectVolume | None; bounded by the verification window | SRA | Not cancellable |
 | SetShares, PostVolume, RegisterPairs | None; bounded by the window, the posting period, and the uniqueness check | SRA | Not cancellable |
 
@@ -79,7 +79,7 @@ SWA Governance is **Tier 1**: it governs the Stream Weights Actor (SWA) — the 
 
 > SWA Governance discretionary powers (FIP-0118): *"add a stream (RegisterStream) or remove one (RemoveStream)"*, *"alter a stream: rewrite its Weight record (SetWeightRecords) or re-route its Distribution"*, *"tune the gate parameters (SetGateParams)"*, and *"upgrade the SWA's code"*.
 
-SWA Governance approves nothing routine: the w0 ramp and the volume gate are mechanism-executed. Every discretionary action writes to f02, requires a published and accepted FIP first, and is held for `SWA_TIMELOCK` (7 days) before it binds.
+SWA Governance approves nothing routine: the w1 ramp and the volume gate are mechanism-executed. Every discretionary action writes to f02, requires a published and accepted FIP first, and is held for `SWA_TIMELOCK` (7 days) before it binds.
 
 - **During every `SWA_TIMELOCK`:** monitor the f02 queue and the off-chain objection process, and act on a sustained objection within the expected response-time commitment of 7 days.
 - **Per discretionary write:** confirm the backing FIP is published and accepted before approval, and verify the schedule envelope (the sum of weights at most 1 across the whole segment) before submission.
@@ -91,7 +91,7 @@ SWA Governance approves nothing routine: the w0 ramp and the volume gate are mec
 > 2. Pre-submission check: verify the schedule envelope (Σw ≤ 1 across the whole segment) and that the write matches the accepted FIP.
 > 3. Both SWA Safes approve `ProposeWrite(write)`.
 > 4. The SWA relays to f02; f02 queues it with an `effective_epoch` and holds it for `SWA_TIMELOCK` (7 days).
-> 5. Objection window: the queued write is public; monitor the off-chain objection process. Either SWA Safe may `Cancel(id)` on a mismatch, a missing FIP, or a sustained objection; absent a cancellation it binds at `effective_epoch`.
+> 5. Objection window: the queued write is public; monitor the off-chain objection process. Either SWA Safe may `cancelPending` / `cancelPendingWeight` / `veto(taskId)` (as applies) on a mismatch, a missing FIP, or a sustained objection; absent a cancellation it binds at `effective_epoch`.
 > 6. Record the outcome in this repository (and in the [Program Change Log](06-changelog.md).
 
 The L1 envelope check restates a FIP invariant:
@@ -139,8 +139,8 @@ Standard flow; the call is `SetDistribution(id, distribution)`. Can be used, for
 
 > **Requires:** both SWA Safes + accepted FIP · **Hold:** SWA-internal timelock, 7 days · **Enforced by:** SWA · **Cancel:** either SWA Safe
 
-1. Publish and get an accepted FIP for the new gate parameters (step size, volume targets, escalation ratio).
-2. Both SWA Safes approve `SetGateParams(params)`.
+1. Publish and get an accepted FIP for the new gate parameters (`base`, `stepRatio`, and `steps` — not a free “step size”; the 5pp step itself is a contract constant).
+2. Both SWA Safes approve `SetGateParams(params)`. A discretionary write that changes the w2 Weight record must go in the same governance action as the matching `steps` adjustment via `SetGateParams`.
 3. The change queues in the SWA's own state under the SWA-internal timelock (7 days). The gate rule itself is code and cannot change via a parameter write. Either Safe may cancel during the hold.
 4. Record in this repository.
 
@@ -158,11 +158,13 @@ Same flow as 2.2.5; the FIP carries the upgrade. It executes through the pre-upg
 <details>
 <summary><strong>2.2.7 — Replace an SWA Safe (cooperative)</strong></summary>
 
-> **Requires:** both SWA Safes · **Hold:** SWA-internal timelock, 7 days · **Enforced by:** SWA · **Cancel:** either SWA Safe
+> **Requires:** both SWA Safes · **Hold:** none · **Enforced by:** SWA · **Cancel:** not cancellable
 
-1. Both SWA Safes approve replacing the registered Safe address.
-2. It queues under the SWA-internal timelock; either Safe may cancel.
-3. It binds; announce here with a post-mortem.
+1. Both SWA Safes approve replacing the registered Safe address (`ReplaceOwner`).
+2. It binds at once when the second Safe approves (FIP: cooperative rotation is not held).
+3. Announce here with a post-mortem.
+
+The SWA-internal timelock covers gate-parameter changes and code upgrades only — not cooperative Safe replacement.
 
 Hostile/deadlocked case (a Safe blocks its own replacement): the exit is one level up — a coordinated network upgrade migrates the SWA address in f02, always under a published FIP. See §2.5, Safety and rotation playbook.
 
@@ -173,16 +175,22 @@ Hostile/deadlocked case (a Safe blocks its own replacement): the exit is one lev
 
 > **Requires:** either SWA Safe alone · **When:** during the hold/window
 
-Either Safe calls `Cancel(id)` (relayed to `f02.CancelPending(id)`), discarding a queued discretionary write. A cancellation only preserves the status quo. Mechanism writes (the gate step) are tagged at queue time and cannot be cancelled.
+Either Safe can stop a bad SWA change on the matching path:
+
+1. `cancelPending(id, op)` — queued stream operation on f02 (relayed to `f02.CancelPending`).
+2. `cancelPendingWeight(op)` — queued weight write on f02.
+3. `veto(taskId)` — a task still inside the SWA (half-approved, or in the SWA-internal hold).
+
+A cancellation only preserves the status quo. Mechanism writes (the gate step via `StepWeightRecords`) are tagged at queue time and cannot be cancelled.
 
 </details>
 
 <details>
 <summary><strong>2.2.9 — Monitor mechanism-executed updates</strong></summary>
 
-The w0 ramp and the quarterly gate step (`QuarterlyGateCheck` → `SetWeightRecords`) run permissionlessly. Each quarter:
+The w1 ramp and the quarterly gate step (`QuarterlyGateCheck` → `StepWeightRecords`) run permissionlessly. Each quarter:
 
-1. Confirm the queued w1 write matches the gate rule and the bound `AggregatedFPV(Q)`.
+1. Confirm the queued w2 write matches the gate rule and the bound `AggregatedFPV(Q)`.
 2. Note it is a scheduled write: it queues 7 days for visibility only and is not cancellable.
 3. If a mismatch suggests compromise, escalate per §2.5, Safety and rotation playbook; the remedy will be a Safe/code replacement, not cancelling the mechanism write.
 
@@ -211,7 +219,7 @@ Registry changes need both Registry Safes but need no per-change FIP (the one ex
 >
 > 1. Trigger and diligence (application, dispute outcome, audit finding, rotation request, or list update).
 > 2. Both Registry Safes approve the relevant call.
-> 3. The SRA queues the change in the Change Log record action.
+> 3. The change binds when the second SRA Safe approves (no pending queue, no cancellation path). Record it in the Change Log.
 > 4. Either Registry Safe have visibility on changes.
 > 5. Record the outcome in the issue/repository, and update the [Orchestrator Registry](#2312-orchestrator-registry-admitted-orchestrators) where the change affects an Orchestrator's status.
 
@@ -231,7 +239,7 @@ For Phase 2 (subject to a future FIP): admission becomes permissionless, enabled
 <details>
 <summary><strong>2.3.1 — Admit an Orchestrator (AddOrchestrator)</strong></summary>
 
-> **Requires:** both SRA Safes · **Hold:** `AddOrchestrator` · **Enforced by:** SRA · **Cancel:** either SRA Safe · **No FIP**
+> **Requires:** both SRA Safes · **Hold:** none · **Enforced by:** SRA · **Cancel:** not cancellable (either Safe may `veto(taskId)` only while half-approved) · **No FIP**
 
 1. Application filed as an issue (identity/team, funding plan, declared (payer, operator) pairs and measurement rules).
 2. SRA Governance scores it against the admission rubric. Both Registry Safes approve `AddOrchestrator(orch, wallet)`; the uniqueness rule reverts any pair already bound elsewhere.
@@ -243,7 +251,7 @@ For Phase 2 (subject to a future FIP): admission becomes permissionless, enabled
 <details>
 <summary><strong>2.3.2 — Remove an Orchestrator (RemoveOrchestrator)</strong></summary>
 
-> **Requires:** both SRA Safes · **Hold:** `RemoveOrchestrator` · **Enforced by:** SRA · **Cancel:** either SRA Safe · **No FIP**
+> **Requires:** both SRA Safes · **Hold:** none · **Enforced by:** SRA · **Cancel:** not cancellable (either Safe may `veto(taskId)` only while half-approved) · **No FIP**
 
 Remove is permanent. It **releases** the Orchestrator's (payer, operator) bindings, f099 repoint (future income burns), accrued stays claimable, releases bindings, freeing those pairs for re-registration. Update the Orchestrator Registry to mark the entry *Removed*.
 
@@ -252,7 +260,7 @@ Remove is permanent. It **releases** the Orchestrator's (payer, operator) bindin
 <details>
 <summary><strong>2.3.3 — Replace / rotate an Orchestrator address (ReplaceWallet)</strong></summary>
 
-> **Requires:** both SRA Safes · **Enforced by:** SRA · **Cancel:** either SRA Safe · **No FIP**
+> **Requires:** both SRA Safes · **Hold:** none · **Enforced by:** SRA · **Cancel:** not cancellable (either Safe may `veto(taskId)` only while half-approved) · **No FIP**
 
 Standard registry-change flow; the call is `Replace(old, new)`. Rotates a compromised or non-functioning address; f02 pays the new address from the effective epoch, so no payment is missed. Update the controlling-wallet field in the Orchestrator Registry.
 
@@ -303,16 +311,16 @@ Full procedure and evidence standards: [§4.4.2](04-quarterly-review-and-runbook
 <details>
 <summary><strong>2.3.7 — Maintain admitted lists & fee-auction parameters (SetAdmittedLists, pricing settings)</strong></summary>
 
-> **Requires:** both SRA Safes · **Enforced by:** SRA · **Cancel:** either SRA Safe · **No FIP**
+> **Requires:** both SRA Safes · **Hold:** none · **Enforced by:** SRA · **Cancel:** not cancellable (either Safe may `veto(taskId)` only while half-approved) · **No FIP**
 
-Standard registry-change flow for the admitted-stablecoin whitelist, the admitted Filecoin Pay contract addresses, and the fee-auction pricing parameters (`MIN_LOT`, `PRICE_BAND`). These are gate-consequential, so they are held like any registry change — never a silent edit.
+Standard registry-change flow for the admitted-stablecoin whitelist, the admitted Filecoin Pay contract addresses, and the fee-auction pricing parameters (`MIN_LOT_FLOOR`, `MIN_LOT_ALPHA`, `PRICE_BAND`, `REGISTRATION_CUTOFF`). These are gate-consequential. Registry actions bind at once when the second Safe approves — not held, not cancellable. Either Safe can `veto(taskId)` on a half-approved task before the second approval. Never a silent edit.
 
 </details>
 
 <details>
 <summary><strong>2.3.8 — Upgrade the SRA's code</strong></summary>
 
-> **Requires:** both SRA Safes + accepted FIP · **Enforced by:** SRA · **Cancel:** either SRA Safe
+> **Requires:** both SRA Safes + accepted FIP · **Hold:** `SRA_UPGRADE_HOLD`, 7 days · **Enforced by:** SRA · **Cancel:** either SRA Safe via `veto(taskId)` during the hold
 
 The one registry change that requires a FIP (e.g., the Phase 2 permissionless-admission transition). Otherwise follows the standard flow.
 
@@ -321,9 +329,9 @@ The one registry change that requires a FIP (e.g., the Phase 2 permissionless-ad
 <details>
 <summary><strong>2.3.9 — Replace an SRA Safe (cooperative)</strong></summary>
 
-> **Requires:** both SRA Safes · **Enforced by:** SRA · **Cancel:** either SRA Safe
+> **Requires:** both SRA Safes · **Hold:** none · **Enforced by:** SRA · **Cancel:** not cancellable
 
-Both Safes approve the replacement; either may cancel; it binds at once and is announced with a post-mortem.
+Both Safes approve the replacement; it binds at once when the second Safe approves and is announced with a post-mortem. Not held and not cancellable.
 
 Hostile/deadlocked case: a SWA write re-points the service stream's writer to a redeployed SRA, always under a published FIP; registry state is reconstructible from public data. See §2.5, Safety and rotation playbook.
 
@@ -332,7 +340,7 @@ Hostile/deadlocked case: a SWA write re-points the service stream's writer to a 
 <details>
 <summary><strong>2.3.10 — Monitor mechanism-executed updates (oversight, no approval)</strong></summary>
 
-`FinalizeConversion(Q)` and `SubmitShares(Q)` run permissionlessly and are not held. Duty: confirm each has run and that `SubmitShares` wrote the correct wallet-to-share map (integrity rests on the upstream verification window). Neither is cancellable.
+`SubmitShares(Q)` runs permissionlessly and is not held (FPV is posted already USD-denominated; there is no separate on-chain conversion pass). Duty: confirm `SubmitShares` has run and wrote the correct wallet-to-share map (integrity rests on the upstream verification window). It is not cancellable.
 
 </details>
 
@@ -358,9 +366,9 @@ This is the canonical, human-readable list of Orchestrators admitted to the Sols
 
 > **Program status: not yet started.** No Orchestrators have been admitted. The first entries will be added when the Solstice program kicks off and SRA Governance executes the first `Admit` action. The table below shows the columns each entry must carry.
 
-| # | Orchestrator | Controlling wallet | Status | Admitted (quarter / epoch) | Declaration | Registered (payer, operator) pairs |
-| :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| 1 | Orch_1 | 0x97A90f5696be5E3C8d3752C92Adac287c2b4484e | Approved | NA | NA | NA |
+| # | Orchestrator | Identity (`orch`) | Payout wallet | Status | Admitted (quarter / epoch) | Declaration | Registered (payer, operator) pairs |
+| :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
+| 1 | Orch_1 | 0x97A90f5696be5E3C8d3752C92Adac287c2b4484e | 0x97A90f5696be5E3C8d3752C92Adac287c2b4484e | Approved | NA | NA | NA |
 
 **Per-Orchestrator entry template**
 
@@ -369,7 +377,8 @@ When admitting an Orchestrator, add a row to the table above and a detailed entr
 ```markdown
 ### <Orchestrator name>
 
-- **Controlling wallet:** <f4… / 0x… address>
+- **Identity (`orch`):** <f4… / 0x… address>
+- **Payout wallet:** <f4… / 0x… address> (may differ from identity)
 - **Status:** Active | Removed
 - **Admitted:** <quarter, epoch, tx hash>
 - **Declaration issue:** #<issue number> (link)
@@ -379,7 +388,7 @@ When admitting an Orchestrator, add a row to the table above and a detailed entr
 - **History:** <admit / replace / remove events, each with date + tx>
 ```
 
-> Field definitions follow the Orchestrator guidelines: the controlling wallet in [§3.2](03-orchestrator-operational-guidelines.md#32-orchestrators-tasks-and-actions), the declaration file in [§3.1, Policy 6](03-orchestrator-operational-guidelines.md#31-policies), and the (payer, operator) binding rules in [§3.1, Policy 3](03-orchestrator-operational-guidelines.md#31-policies) (FIP-fixed uniqueness).
+> Field definitions follow the Orchestrator guidelines: identity and payout wallet in [§3.2](03-orchestrator-operational-guidelines.md#32-orchestrators-tasks-and-actions), the declaration file in [§3.1, Policy 6](03-orchestrator-operational-guidelines.md#31-policies), and the (payer, operator) binding rules in [§3.1, Policy 3](03-orchestrator-operational-guidelines.md#31-policies) (FIP-fixed uniqueness).
 
 ---
 
@@ -406,12 +415,14 @@ Each organization runs a separate Safe per tier — four accounts in total — s
 | :-- | :-- | :-- |
 | `SWA_TIMELOCK` (objection window on SWA writes to f02) | FIP-fixed, enforced in f02 | 7 days |
 | SWA-internal timelock (own state and code) | FIP-fixed, equal to the f02 window | 7 days |
-| `POST_PERIOD` (FPV posting) | This repository | Quarterly (calendar) |
-| `VERIFICATION_WINDOW` (FPV verification) | This repository | 7 days |
-| Dispute resolution target ([§3.4.2](03-orchestrator-operational-guidelines.md#342-dispute-resolution-for-contested-bindings)) | This repository | 7 days |
+| `POST_PERIOD` (FPV posting) | FIP-fixed at SRA deployment (code upgrade to change) | 8,640 epochs (3 days) |
+| `VERIFICATION_WINDOW` (FPV verification) | FIP-fixed at SRA deployment (code upgrade to change) | 20,160 epochs (7 days) |
+| `EPOCHS_PER_QUARTER` | FIP-fixed at SRA deployment (code upgrade to change) | 262,974 epochs |
+| Quarter boundaries | Counted from `ACTIVATION_EPOCH` | Not calendar quarters |
+| Dispute resolution target ([§4.4.2](04-quarterly-review-and-runbook.md#442-dispute-resolution-for-contested-bindings)) | This repository | 7 days |
 | Orchestrator response window ([§4.4.5](04-quarterly-review-and-runbook.md#445-escalation)) | This repository | 7 days |
 | Admitted-stablecoin whitelist | This repository | TBD |
-| Fee-auction pricing parameters (`MIN_LOT`, `FLOOR`) | This repository | TBD |
+| Fee-auction pricing parameters (`MIN_LOT_FLOOR`, `MIN_LOT_ALPHA`, `PRICE_BAND`, `REGISTRATION_CUTOFF`) | SRA parameter events (next-quarter boundary) | See FIP initial values |
 | Admission rubric | This repository | TBD, after the first application cycle |
 
 > `SWA_TIMELOCK` is FIP-fixed and enforced in L1:
@@ -434,13 +445,13 @@ The threat model rests on the two-Safes rule: no single Safe can make a change b
 
 ### 2.5.2 A whole Safe compromised (internal threshold reached by an attacker)
 
-1. Nothing binds. Approval requires the other Safe, and the honest organization cancels each malicious pending change during the hold or window. Repeated resubmission restarts the hold and is publicly visible; the attacker cannot bind a change silently. On the SWA side, a malicious write also lacks its required published FIP, making the objection case unambiguous.
+1. Nothing binds from one Safe alone. A hold (where one exists) starts only after both Safes approve. One Safe can only submit a task; the `Submitted` event carries the `taskId` (a hash), not the full content. The other Safe’s remedy is `veto(taskId)` on that half-approved or held task. Repeated resubmission is publicly visible; the attacker cannot bind a change silently. On the SWA side, a malicious discretionary write also lacks its required published FIP, making the objection case unambiguous.
 2. The tier is treated as frozen (halted/suspended), and frozen consequences are bounded: registry frozen means payments and `SetShares` continue; SWA frozen means discretionary changes stop while the ramp and the gate continue through the permissionless crank.
 3. Exit: replace the compromised Safe address. This requires both Safes, so if the compromised Safe obstructs, the FIP backstop applies (2.5.3).
 
 ### 2.5.3 Replacing a registered Safe
 
-**Cooperative case:** both Safes approve the replacement; it queues under the hold or window and is cancellable like any change; announced here with a post-mortem. See the cooperative Safe-replacement actions 2.2.7 (SWA) and 2.3.9 (SRA).
+**Cooperative case:** both Safes approve the replacement; it binds at once and is not cancellable; announced here with a post-mortem. See 2.2.7 (SWA) and 2.3.9 (SRA).
 
 **Hostile or deadlocked case, always under a published FIP:** for SRA Governance, a SWA write re-points the service stream's designated writer to a redeployed SRA; registry state is reconstructible from public data, and no network upgrade is needed. For SWA Governance, a coordinated network upgrade migrates the SWA address in f02.
 
