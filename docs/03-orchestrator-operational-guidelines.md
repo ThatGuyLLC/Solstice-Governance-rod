@@ -70,12 +70,14 @@ Orchestrators set their own pricing, choose their own clients, and structure the
 
 > **Cadence:** at admission + on a need basis (replace) · **On-chain call:** `ReplaceWallet(old, new)` (rotation)
 
-Each orchestrator is represented on-chain by a single controlling wallet: the address registered in the SRA registry.
+Each Orchestrator has **two** on-chain addresses in the SRA registry (`AddOrchestrator(orch, wallet)`):
 
-1. Register one clearly-owned address as your controlling wallet — the single identity that receives the service-stream share from f02, and calls `RegisterPairs`/`PostVolume`.
-2. As part of the admission process (see [§2.3 SRA Governance Tier](02-solstice-program-governance.md#23-sra-governance-tier--tasks-and-actions)), record in your GitHub declaration issue which address runs your orchestrator operation. Your entry then appears in the [Orchestrator Registry](02-solstice-program-governance.md#2312-orchestrator-registry-admitted-orchestrators).
-3. Hold it as a multisig (e.g., a Safe) with hardware-key signers, rather than a single externally-owned key (recommended).
-4. Rotate a compromised or changed address via `Replace(old, new)` (a registry change); f02 pays the new address from the effective epoch, so no payment is missed.
+1. **Orchestrator identity (`orch`)** — calls `RegisterPairs` and `PostVolume`. Must not be a payment-channel actor for those calls’ operational safety.
+2. **Payout wallet (`wallet`)** — receives the service-stream share from f02. Must not be a payment-channel actor; f02 rejects payment channels as share recipients. Prefer a multisig (e.g., a Safe) with hardware-key signers.
+
+They can differ. As part of admission (see [§2.3 SRA Governance Tier](02-solstice-program-governance.md#23-sra-governance-tier--tasks-and-actions)), record both addresses in your GitHub declaration. Your entry appears in the [Orchestrator Registry](02-solstice-program-governance.md#2312-orchestrator-registry-admitted-orchestrators) with both columns.
+
+Rotate a compromised **payout** wallet via `ReplaceWallet(old, new)` (registry change); f02 pays the new wallet from the next share-map push. Rotating the identity address is a registry governance action (remove/re-admit), not `ReplaceWallet`.
 
 </details>
 
@@ -102,11 +104,11 @@ Volume counts only when it settles on an admitted Filecoin Pay contract, in an a
 
 1. Understand your figure: FPV_i(Q) is the value settled on your registered (payer, operator) rails during a given quarter; amounts are denominated in USD — admitted stablecoins at face value, FIL converted off-chain via the reference indexer using public fee-auction prints (`MIN_LOT`, `PRICE_BAND`).
 2. Declare how your volume is measured (your pairs, optional service-contract metadata, booked-revenue basis).
-3. Receiving service stream payouts: f02 accrues your controlling wallet its share of the service stream (w2) every epoch. Entitlements are withdrawn via the permissionless `Claim` method by your wallet or a keeper.
+3. Receiving service stream payouts: f02 accrues your **payout wallet** its share of the service stream (w2) every epoch. Entitlements are withdrawn via the permissionless `Claim` method by that wallet or a keeper.
 
 The following rule establishes how the share is set: `SplitRule` = your bound FPV_i(Q) ÷ AggregatedFPV(Q), written into f02 once per quarter via `SetShares`.
 
-A quarter with no bound volume yields a zero share for that quarter; your wallet is never debited.
+If your bound FPV for the quarter is zero while another Orchestrator has bound volume, your share for that quarter is zero and your wallet is never debited. If no Orchestrator has bound volume (eligible FPV sums to zero), `SubmitShares` is a benign no-op: the existing share map stands.
 
 </details>
 
@@ -115,7 +117,7 @@ A quarter with no bound volume yields a zero share for that quarter; your wallet
 
 > **Cadence:** continuous · **On-chain call:** none (off-protocol)
 
-Rewards land in your controlling wallet each epoch; deploying them against your mandate (client acquisition, subsidies, integrations, migrations, infrastructure, etc.) is your responsibility and lies outside the protocol. Recommended practices:
+Rewards land in your payout wallet each epoch; deploying them against your mandate (client acquisition, subsidies, integrations, migrations, infrastructure, etc.) is your responsibility and lies outside the protocol. Recommended practices:
 
 - **Custody:** hold reserves in a multisig (e.g., Safe) with hardware-key signers; never keep the treasury on a single hot key.
 - **Segregation:** keep a cold reserve (offline/hardware, high signing threshold) separate from a small hot operating wallet; sweep excess from hot to cold.
