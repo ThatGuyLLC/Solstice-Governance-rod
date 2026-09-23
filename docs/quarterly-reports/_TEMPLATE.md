@@ -9,10 +9,26 @@
 | Field | Value |
 | :-- | :-- |
 | Service Orchestrator name | *[enter name]* |
-| Orchestrator wallet address | *[enter wallet address]* |
+| Orchestrator identity (`orch`) | *[enter address]* |
+| Payout wallet | *[enter address]* |
+| Claim keeper (f1) | *[enter f1 account that sends `Claim`; required if payout wallet is a Safe / f410 / EVM contract]* |
 | Quarter covered | *[e.g. Q3 2026]* |
 | Date submitted | *[enter date]* |
 | Reference-indexer version used | *[enter version / commit]* |
+
+### 1.1 Rewards received (pick one basis and use it consistently)
+
+Report **rewards received** under exactly one of these bases for the quarter (state which):
+
+1. **Claimed** — FIL withdrawn from f02 via `Claim` during the quarter, with claim transaction references listed below; or
+2. **Accrued in f02** — the payout wallet’s accrued entitlement in f02 at quarter end (not yet claimed).
+
+| Field | Value |
+| :-- | :-- |
+| Reporting basis | *Claimed / Accrued in f02* |
+| Amount (FIL) | *[enter amount]* |
+| Claim transactions (if Claimed) | *[tx hashes / links; or N/A]* |
+| Accrual note (if Accrued) | *[how read from f02 / indexer; or N/A]* |
 
 ## 2. Financial performance
 
@@ -83,9 +99,11 @@ Standard public-company style disclosure.
 
 ## 3. Use of block rewards
 
+Amounts below should reconcile to the §1.1 figure (claimed or accrued). “Use” means how service-stream rewards were deployed this quarter, not a second rewards total.
+
 | Field | Value |
 | :-- | :-- |
-| Total block rewards received this quarter | *[enter amount]* |
+| Total matching §1.1 (same basis) | *[enter amount]* |
 | On-chain disbursements | *[outbound transfers from the Orchestrator wallet — e.g. deal subsidies, integration payments]* |
 | Data onboarded, active | *[bytes under active deals attributed to the service]* |
 | Storage providers engaged | *[count of distinct SP actor IDs taking deals attributed to the service]* |

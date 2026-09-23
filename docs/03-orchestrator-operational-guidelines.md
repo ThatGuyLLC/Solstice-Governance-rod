@@ -19,7 +19,6 @@ Orchestrators are free to run their businesses autonomously. The program does no
 - **Responsiveness.** Orchestrators respond to dispute and verification requests within the response window (7 days) and keep their contact information in this repository current.
 - **Good-faith declarations.** Declarations are accepted by default. The program extends trust upfront because every posted figure is recomputable from public events; misreporting is mechanically detectable and is grounds for removal.
 - **Self-monitoring.** Orchestrators are expected to monitor their own recomputed FPV against posted figures during each verification window, and to flag discrepancies rather than wait for them to surface as findings.
-- **Wallet Set-up** Orchestrator’s controlling wallet must not be a payment channel actor.", this is becasue the f02 rejects payment channels as share recipients.
 
 ## 3.1 Policies
 
@@ -66,20 +65,21 @@ Orchestrators set their own pricing, choose their own clients, and structure the
 </details>
 
 <details>
-<summary><strong>3.2.2 — Orchestrator controlling wallet — identity and matching</strong></summary>
+<summary><strong>3.2.2 — Orchestrator identity and payout wallet</strong></summary>
 
-> **Cadence:** at admission + on a need basis (replace) · **On-chain call:** `ReplaceWallet(old, new)` (rotation)
+> **Cadence:** at admission + on a need basis (`ReplaceWallet`) · **On-chain call:** `ReplaceWallet(old, new)` (payout-wallet rotation)
 
 Each Orchestrator has **two** on-chain addresses in the SRA registry (`AddOrchestrator(orch, wallet)`):
 
-1. **Orchestrator identity (`orch`)** — calls `RegisterPairs` and `PostVolume`. Must not be a payment-channel actor for those calls’ operational safety.
-2. **Payout wallet (`wallet`)** — receives the service-stream share from f02. Must not be a payment-channel actor; f02 rejects payment channels as share recipients. Prefer a multisig (e.g., a Safe) with hardware-key signers.
+1. **Orchestrator identity (`orch`)** — calls `RegisterPairs` and `PostVolume`.
+2. **Payout wallet (`wallet`)** — receives the service-stream share from f02. Must not be a payment-channel actor; f02 rejects payment channels as share recipients. Prefer a multisig (e.g., a Safe) with hardware-key signers. If the payout wallet is a Safe or other f410 / EVM-contract address, also name an **f1 claim keeper** (see §3.2.4).
 
 They can differ. As part of admission (see [§2.3 SRA Governance Tier](02-solstice-program-governance.md#23-sra-governance-tier--tasks-and-actions)), record both addresses in your GitHub declaration. Your entry appears in the [Orchestrator Registry](02-solstice-program-governance.md#2312-orchestrator-registry-admitted-orchestrators) with both columns.
 
-Rotate a compromised **payout** wallet via `ReplaceWallet(old, new)` (registry change); f02 pays the new wallet from the next share-map push. Rotating the identity address is a registry governance action (remove/re-admit), not `ReplaceWallet`.
+Rotate a compromised **payout** wallet via `ReplaceWallet(old, new)`. Per FIP-0118 §3.2, that call swaps the payout wallet through an immediate `ReplaceAddress`, so f02 pays the new wallet at once.
 
 </details>
+
 
 <details>
 <summary><strong>3.2.3 — Linking deals to Filecoin Pay services</strong></summary>
@@ -104,7 +104,7 @@ Volume counts only when it settles on an admitted Filecoin Pay contract, in an a
 
 1. Understand your figure: FPV_i(Q) is the value settled on your registered (payer, operator) rails during a given quarter; amounts are denominated in USD — admitted stablecoins at face value, FIL converted off-chain via the reference indexer using public fee-auction prints (`MIN_LOT`, `PRICE_BAND`).
 2. Declare how your volume is measured (your pairs, optional service-contract metadata, booked-revenue basis).
-3. Receiving service stream payouts: f02 accrues your **payout wallet** its share of the service stream (w2) every epoch. Entitlements are withdrawn via the permissionless `Claim` method by that wallet or a keeper.
+3. Receiving service stream payouts: f02 accrues your **payout wallet** its share of the service stream (w2) every epoch. Entitlements are withdrawn via the permissionless native `Claim` method. An f410 (including a Safe) or an EVM-contract wallet cannot send that call; an **f1 keeper account** must. Name the keeper as a required part of setup in your declaration (alongside identity and payout wallet). Prefer keeping the Safe as the payout wallet for custody and using the f1 only to `Claim`.
 
 The following rule establishes how the share is set: `SplitRule` = your bound FPV_i(Q) ÷ AggregatedFPV(Q), written into f02 once per quarter via `SetShares`.
 

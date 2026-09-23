@@ -1,5 +1,18 @@
 # 6. Program Change Log
 
+## 2026-09-23 — FIP-0118 leftovers (ReplaceWallet)
+
+- Doc 02/03: rename leftover “controlling wallet” / `Replace(old, new)` to `ReplaceWallet` / payout wallet.
+- Doc 03: `ReplaceWallet` is an immediate payout-wallet swap (FIP §3.2), not deferred to the next share-map push.
+- Dropped non-FIP asides: payment-channel rule on identity; identity rotation as remove/re-admit.
+- Doc 02 §2.4.1: Org-1 Safe addresses aligned to solstice `deployments.json` (`swaOwner2` / `sraOwner2`); SRA rule no longer says “either alone cancels” (binds at once per §2.1.2).
+- Doc 02 §2.2.1 / §2.2.5: pairing duty retuned — FIP §3.1.1 sequencing (no `QuarterlyGateCheck` between effective epochs; SWA enforces only when holds overlap) plus cancel-recovery (re-send a paired write).
+- Doc 02 §2.3.12: initial Orchestrator activation disclosure (Policy 6 declaration + Active / quarter 1 registry row for `0x97A9…484e`).
+- Doc 02: task-register issue (calldata + `taskId`) before first approval; ReplaceOwner (§2.2.7 / §2.3.9) starts with veto-every-open-task (Owners.sol bit recycle).
+- Doc 02 §2.3.4: CorrectVolume dual-approval internal deadline (day 5 / scaled on calibnet); first approver vetoes if the window closes without the second.
+- Doc 03 §3.2.2 / §3.2.4 + quarterly report template: name an f1 claim keeper when payout is Safe/f410/EVM; “rewards received” = claimed (with txs) or accrued in f02.
+
+
 
 ## 2026-09-22 — Align operational docs with FIP-0118
 
