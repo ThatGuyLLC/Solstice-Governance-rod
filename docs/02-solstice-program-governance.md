@@ -103,7 +103,7 @@ The L1 envelope check restates a FIP invariant:
 
 > **Requires:** both SWA Safes + accepted FIP · **Hold:** `SWA_TIMELOCK`, 7 days · **Enforced by:** f02 · **Cancel:** either SWA Safe
 
-Standard flow above; the call is `SetWeightRecords`. Reducing a weight to zero is held exactly like removing the stream.
+Standard flow above; the call is `SetWeightRecords`. Reducing a weight to zero is held exactly like removing the stream. A discretionary write that changes the w2 Weight record must be paired with the matching `steps` adjustment via `SetGateParams` (see §2.2.5 for sequencing and recovery).
 
 </details>
 
@@ -140,9 +140,10 @@ Standard flow; the call is `SetDistribution(id, distribution)`. Can be used, for
 > **Requires:** both SWA Safes + accepted FIP · **Hold:** SWA-internal timelock, 7 days · **Enforced by:** SWA · **Cancel:** either SWA Safe
 
 1. Publish and get an accepted FIP for the new gate parameters (`base`, `stepRatio`, and `steps` — not a free “step size”; the 5pp step itself is a contract constant).
-2. Both SWA Safes approve `SetGateParams(params)`. A discretionary write that changes the w2 Weight record must go in the same governance action as the matching `steps` adjustment via `SetGateParams`.
+2. Both SWA Safes approve `SetGateParams(params)`. A discretionary write that changes the w2 Weight record must go in the same governance action as the matching `steps` adjustment via `SetGateParams`. Per FIP-0118 §3.1.1, sequence the pair so that no `QuarterlyGateCheck` applies between the two effective epochs; the SWA enforces this only when the two holds overlap.
 3. The change queues in the SWA's own state under the SWA-internal timelock (7 days). The gate rule itself is code and cannot change via a parameter write. Either Safe may cancel during the hold.
-4. Record in this repository.
+4. If one half of a paired write is cancelled after the other has applied, send a new paired write so w2 and `steps` do not stay mismatched.
+5. Record in this repository.
 
 </details>
 
