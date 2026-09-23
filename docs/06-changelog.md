@@ -1,5 +1,12 @@
 # 6. Program Change Log
 
+## 2026-09-23 — FIP-0118 leftovers (ReplaceWallet)
+
+- Doc 02/03: rename leftover “controlling wallet” / `Replace(old, new)` to `ReplaceWallet` / payout wallet.
+- Doc 03: `ReplaceWallet` is an immediate payout-wallet swap (FIP §3.2), not deferred to the next share-map push.
+- Dropped non-FIP asides: payment-channel rule on identity; identity rotation as remove/re-admit.
+
+
 
 ## 2026-09-22 — Align operational docs with FIP-0118
 
