@@ -232,7 +232,6 @@ An Orchestrator's application is filed as an issue in this repository. If applic
 A uniqueness rule is fixed by the FIP:
 
 > "Each (payer, operator) pair is bound to at most one orchestrator, so a registration that duplicates an existing binding reverts."
-> Also "an Orchestrator’s controlling wallet must not be a payment channel actor.", this is becasue the f02 rejects payment channels as share recipients.
 
 For Phase 2 (subject to a future FIP): admission becomes permissionless, enabled by a standard attribution-metadata interface specified in a future FIP. The rubric and diligence apply to Phase 1 only.
 
@@ -262,7 +261,7 @@ Remove is permanent. It **releases** the Orchestrator's (payer, operator) bindin
 
 > **Requires:** both SRA Safes · **Hold:** none · **Enforced by:** SRA · **Cancel:** not cancellable (either Safe may `veto(taskId)` only while half-approved) · **No FIP**
 
-Standard registry-change flow; the call is `Replace(old, new)`. Rotates a compromised or non-functioning address; f02 pays the new address from the effective epoch, so no payment is missed. Update the controlling-wallet field in the Orchestrator Registry.
+Standard registry-change flow; the call is `ReplaceWallet(old, new)`. Rotates a compromised or non-functioning **payout wallet**; per FIP-0118 §3.2, `ReplaceWallet` swaps the payout wallet through an immediate `ReplaceAddress` call, so f02 pays the new wallet at once. Update the payout-wallet field in the Orchestrator Registry.
 
 </details>
 
