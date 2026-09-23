@@ -1,5 +1,12 @@
 # 6. Program Change Log
 
+## 2026-09-23 — Canonical calldata and payment-channel wallet
+
+- Task register: action issue carries the calldata both Safes copy; address lists sorted ascending before encoding (`taskId` = `keccak256(msg.data)`).
+- Admit (§2.3.1): checklist step — resolve payout wallet to actor ID; actor code must not be a payment channel (solstice #78 known gap).
+- ReplaceWallet (§2.3.3): payment-channel recovery order — `ReplaceWallet` → `SubmitShares` → `RemoveOrchestrator`.
+
+
 ## 2026-09-23 — FIP-0118 leftovers (ReplaceWallet)
 
 - Doc 02/03: rename leftover “controlling wallet” / `Replace(old, new)` to `ReplaceWallet` / payout wallet.

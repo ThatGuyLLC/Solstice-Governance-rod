@@ -243,9 +243,10 @@ For Phase 2 (subject to a future FIP): admission becomes permissionless, enabled
 > **Requires:** both SRA Safes · **Hold:** none · **Enforced by:** SRA · **Cancel:** not cancellable (either Safe may `veto(taskId)` only while half-approved) · **No FIP**
 
 1. Application filed as an issue (identity/team, funding plan, declared (payer, operator) pairs and measurement rules).
-2. SRA Governance scores it against the admission rubric. Both Registry Safes approve `AddOrchestrator(orch, wallet)`; the uniqueness rule reverts any pair already bound elsewhere.
-3. Either Safe may cancel.
-4. Binds; record in the issue **and add the Orchestrator to the [Orchestrator Registry (2.3.12)](#2312-orchestrator-registry-admitted-orchestrators)**.
+2. SRA Governance scores it against the admission rubric. **Admission checklist — payout wallet:** resolve the proposed wallet to its actor ID and confirm the actor code is **not** a payment channel. Since solstice #78 the SRA rejects a wallet with no actor, but payment channels can still pass `_assertWalletAdmissible` and then fail in `SetShares` / `ReplaceAddress` (`ServiceRewardsActor.sol`).
+3. Both Registry Safes approve `AddOrchestrator(orch, wallet)` using the task-register issue’s canonical calldata; the uniqueness rule reverts any pair already bound elsewhere.
+4. Either Safe may cancel (veto while half-approved).
+5. Binds; record in the issue **and add the Orchestrator to the [Orchestrator Registry (2.3.12)](#2312-orchestrator-registry-admitted-orchestrators)**.
 
 </details>
 
@@ -264,6 +265,12 @@ Remove is permanent. It **releases** the Orchestrator's (payer, operator) bindin
 > **Requires:** both SRA Safes · **Hold:** none · **Enforced by:** SRA · **Cancel:** not cancellable (either Safe may `veto(taskId)` only while half-approved) · **No FIP**
 
 Standard registry-change flow; the call is `ReplaceWallet(old, new)`. Rotates a compromised or non-functioning **payout wallet**; per FIP-0118 §3.2, `ReplaceWallet` swaps the payout wallet through an immediate `ReplaceAddress` call, so f02 pays the new wallet at once. Update the payout-wallet field in the Orchestrator Registry.
+
+**Payment-channel wallet recovery.** A payout wallet that is a payment channel can pass admission’s actor-exists check but breaks `SubmitShares` / `SetShares` for **every** Orchestrator (Rod’s devnet). `RemoveOrchestrator` also reverts while a quarter’s share map is still pending (`PendingShares`). Exit order:
+
+1. `ReplaceWallet` to a non-payment-channel wallet (and re-check actor code).
+2. `SubmitShares` for the pending quarter (now that every wallet in the map is admissible).
+3. `RemoveOrchestrator` if the Orchestrator is being exited (only after shares are no longer pending).
 
 </details>
 
@@ -315,7 +322,7 @@ Full procedure and evidence standards: [§4.4.2](04-quarterly-review-and-runbook
 
 > **Requires:** both SRA Safes · **Hold:** none · **Enforced by:** SRA · **Cancel:** not cancellable (either Safe may `veto(taskId)` only while half-approved) · **No FIP**
 
-Standard registry-change flow for the admitted-stablecoin whitelist, the admitted Filecoin Pay contract addresses, and the fee-auction pricing parameters (`MIN_LOT_FLOOR`, `MIN_LOT_ALPHA`, `PRICE_BAND`, `REGISTRATION_CUTOFF`). These are gate-consequential. Registry actions bind at once when the second Safe approves — not held, not cancellable. Either Safe can `veto(taskId)` on a half-approved task before the second approval. Never a silent edit.
+Standard registry-change flow for the admitted-stablecoin whitelist, the admitted Filecoin Pay contract addresses, and the fee-auction pricing parameters (`MIN_LOT_FLOOR`, `MIN_LOT_ALPHA`, `PRICE_BAND`, `REGISTRATION_CUTOFF`). These are gate-consequential. Registry actions bind at once when the second Safe approves — not held, not cancellable. Either Safe can `veto(taskId)` on a half-approved task before the second approval. Never a silent edit. For `SetAdmittedLists`, sort each address array ascending before encoding so both Safes share one `taskId` (see task-register canonical calldata).
 
 </details>
 
@@ -453,7 +460,7 @@ The threat model rests on the two-Safes rule: no single Safe can make a change b
 ### 2.5.2 A whole Safe compromised (internal threshold reached by an attacker)
 
 1. Nothing binds from one Safe alone. A hold (where one exists) starts only after both Safes approve. One Safe can only submit a task; the `Submitted` event carries the `taskId` (a hash), not the full content. The other Safe’s remedy is `veto(taskId)` on that half-approved or held task. Repeated resubmission is publicly visible; the attacker cannot bind a change silently. On the SWA side, a malicious discretionary write also lacks its required published FIP, making the objection case unambiguous.
-2. **Task register (off-chain).** Pending tasks never expire on-chain (`UnanimousGovernance`), and `Submitted` names only the `taskId` hash. Before the first on-chain approval of any governance action, open an issue in this repository that records the exact calldata and the expected `taskId` (= `keccak256(msg.data)`). That issue is the human-readable register entry the hash alone cannot provide.
+2. **Task register (off-chain).** Pending tasks never expire on-chain (`UnanimousGovernance`), and `Submitted` names only the `taskId` hash. Before the first on-chain approval of any governance action, open an issue in this repository that records the exact calldata and the expected `taskId` (= `keccak256(msg.data)`). That issue is the human-readable register entry the hash alone cannot provide. **Canonical calldata:** both Safes copy the calldata from that issue verbatim. Address lists in the payload (e.g. `SetAdmittedLists`) are sorted ascending by address before encoding — the same list in a different order is a different `msg.data` and a different task that never reaches unanimity.
 3. The tier is treated as frozen (halted/suspended), and frozen consequences are bounded: registry frozen means payments and `SetShares` continue; SWA frozen means discretionary changes stop while the ramp and the gate continue through the permissionless crank.
 4. Exit: replace the compromised Safe address. This requires both Safes, so if the compromised Safe obstructs, the FIP backstop applies (2.5.3).
 
