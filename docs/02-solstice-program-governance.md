@@ -399,10 +399,12 @@ Each tier consists of two organization multisigs (Safes) registered in the contr
 
 | Tier | Contract governed | Organization 1 Safe (address) | Organisation 2 Safe (address) | Rule (fixed by the FIP) |
 | :-- | :-- | :-- | :-- | :-- |
-| SWA Governance (§2.2) | Stream Weights Actor (SWA) | 0x591FfA9476A038114000166523486948D3a63E57 | 0x024a3c8CCA435db64D2dfa0f903E4823A5eBdf63 | Both approve; either alone cancels |
-| SRA Governance (§2.3) | Service Rewards Actor (SRA) | 0x8B7F1c94c396C2051D97AFF974187A5640136759 | 0xFb1B58925947E52B3f75BAc3D9fB5325cfb36371 | Both approve; either alone cancels |
+| SWA Governance (§2.2) | Stream Weights Actor (SWA) | 0x4d6db5600c908b3C9b9888cFef43f27F38b203e9 | 0x024a3c8CCA435db64D2dfa0f903E4823A5eBdf63 | Both approve; either alone cancels |
+| SRA Governance (§2.3) | Service Rewards Actor (SRA) | 0x6c724FF811f51945d95872CF99FBd3fF63f7cFa2 | 0xFb1B58925947E52B3f75BAc3D9fB5325cfb36371 | Both approve; binds at once (not cancellable; SRA code upgrades held, either Safe may veto during the hold) |
 
 Each organization runs a separate Safe per tier — four accounts in total — so approvals cannot be replayed across surfaces.
+
+Addresses match [`filecoin-project/solstice` `deployments.json`](https://github.com/filecoin-project/solstice/blob/main/deployments.json) for Filecoin mainnet (`314`): Organization 1 = `*Owner2`, Organisation 2 = `*Owner1`. The SRA row’s cancel rule follows §2.1.2 (registry changes bind at once; only an SRA code upgrade is held and cancellable).
 
 > The approval rule is fixed by FIP-0118:
 >
