@@ -7,6 +7,9 @@
 - Dropped non-FIP asides: payment-channel rule on identity; identity rotation as remove/re-admit.
 - Doc 02 §2.4.1: Org-1 Safe addresses aligned to solstice `deployments.json` (`swaOwner2` / `sraOwner2`); SRA rule no longer says “either alone cancels” (binds at once per §2.1.2).
 - Doc 02 §2.2.1 / §2.2.5: pairing duty retuned — FIP §3.1.1 sequencing (no `QuarterlyGateCheck` between effective epochs; SWA enforces only when holds overlap) plus cancel-recovery (re-send a paired write).
+- Doc 02 §2.3.12: initial Orchestrator activation disclosure (Policy 6 declaration + Active / quarter 1 registry row for `0x97A9…484e`).
+- Doc 02: task-register issue (calldata + `taskId`) before first approval; ReplaceOwner (§2.2.7 / §2.3.9) starts with veto-every-open-task (Owners.sol bit recycle).
+- Doc 02 §2.3.4: CorrectVolume dual-approval internal deadline (day 5 / scaled on calibnet); first approver vetoes if the window closes without the second.
 
 
 
