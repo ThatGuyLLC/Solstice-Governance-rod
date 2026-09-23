@@ -161,9 +161,10 @@ Same flow as 2.2.5; the FIP carries the upgrade. It executes through the pre-upg
 
 > **Requires:** both SWA Safes · **Hold:** none · **Enforced by:** SWA · **Cancel:** not cancellable
 
-1. Both SWA Safes approve replacing the registered Safe address (`ReplaceOwner`).
-2. It binds at once when the second Safe approves (FIP: cooperative rotation is not held).
-3. Announce here with a post-mortem.
+1. Veto every open task in the SWA register first. `removeOwner` does not clear pending approvals; a freed owner bit can recycle to a future owner still carrying old approvals (`Owners.sol`).
+2. Both SWA Safes approve replacing the registered Safe address (`ReplaceOwner`), with the action’s calldata and `taskId` recorded in the issue before the first approval (see task register above).
+3. It binds at once when the second Safe approves (FIP: cooperative rotation is not held).
+4. Announce here with a post-mortem.
 
 The SWA-internal timelock covers gate-parameter changes and code upgrades only — not cooperative Safe replacement.
 
@@ -273,9 +274,10 @@ Standard registry-change flow; the call is `ReplaceWallet(old, new)`. Rotates a 
 
 1. Recompute each posted FPV_i(Q) from public settlement events + registry state, using the versioned reference indexer.
 2. Publish the recomputation.
-3. During the verification window, both Safes jointly call `CorrectVolume(orch, Q, value)` to replace a misreport or supply a figure for a non-poster. A value neither posted nor supplied binds at zero (conservative under-count).
-4. Values bind when the window closes; there is no separate cancellation.
-5. A contested correction is appealed via the [dispute process](04-quarterly-review-and-runbook.md#442-dispute-resolution-for-contested-bindings); the outcome affects only later quarters.
+3. During the verification window, both Safes jointly call `CorrectVolume(orch, Q, value)` to replace a misreport or supply a figure for a non-poster. A value neither posted nor supplied binds at zero (conservative under-count). Open the task-register issue (calldata + `taskId`) before the first approval.
+4. **Internal dual-approval deadline.** The window check runs in the function body after approvals are stored (`ServiceRewardsActor.correctVolume`), so a second approval after the window closes reverts while the first approval stays. Aim for both approvals by day 5 of the 7-day mainnet window (scale the same fraction on calibnet). If the window closes without the second approval, the first approver `veto`s the stale task.
+5. Values bind when the window closes; there is no separate cancellation of a completed correction.
+6. A contested correction is appealed via the [dispute process](04-quarterly-review-and-runbook.md#442-dispute-resolution-for-contested-bindings); the outcome affects only later quarters.
 
 FIP-0118 fixes the binding behavior:
 
@@ -331,7 +333,8 @@ The one registry change that requires a FIP (e.g., the Phase 2 permissionless-ad
 
 > **Requires:** both SRA Safes · **Hold:** none · **Enforced by:** SRA · **Cancel:** not cancellable
 
-Both Safes approve the replacement; it binds at once when the second Safe approves and is announced with a post-mortem. Not held and not cancellable.
+1. Veto every open task in the SRA register first. `removeOwner` does not clear pending approvals; a freed owner bit can recycle to a future owner still carrying old approvals (`Owners.sol`).
+2. Both Safes approve the replacement (`ReplaceOwner`), with the action’s calldata and `taskId` recorded in the issue before the first approval (see task register above). It binds at once when the second Safe approves and is announced with a post-mortem. Not held and not cancellable.
 
 Hostile/deadlocked case: a SWA write re-points the service stream's writer to a redeployed SRA, always under a published FIP; registry state is reconstructible from public data. See §2.5, Safety and rotation playbook.
 
@@ -355,6 +358,8 @@ Maintain and version the reference indexer; monitor anomaly reports, contested b
 
 This is the canonical, human-readable list of Orchestrators admitted to the Solstice program. It is maintained by SRA Governance and mirrors on-chain SRA registry state — **the on-chain registry is the source of truth**; this list is a convenience view and audit trail. Entries are added and updated only through the SRA registry actions above: an Orchestrator appears on Admit (2.3.1), has its wallet updated on Replace (2.3.3), and is marked *Removed* on Remove (2.3.2).
 
+**Initial Orchestrator at activation.** FIP-0118 seats an Orchestrator at activation and requires it to “publish a disclosure on activation, following the requirements in the governance repository set for any other Orchestrator.” That Orchestrator is not admitted through an Admit action (2.3.1). On activation it publishes the same declaration file required of any other Orchestrator ([§3.1, Policy 6](03-orchestrator-operational-guidelines.md#31-policies)), and SRA Governance sets its registry row below to **Active** with admission = quarter 1 (identity and payout wallet `0x97A90f5696be5E3C8d3752C92Adac287c2b4484e`, matching `initialOrchestrator` / `initialOrchestratorWallet` in [`deployments.json`](https://github.com/filecoin-project/solstice/blob/main/deployments.json)).
+
 **Status legend**
 
 | Status | Meaning |
@@ -364,11 +369,11 @@ This is the canonical, human-readable list of Orchestrators admitted to the Sols
 
 **Admitted Orchestrators**
 
-> **Program status: not yet started.** No Orchestrators have been admitted. The first entries will be added when the Solstice program kicks off and SRA Governance executes the first `Admit` action. The table below shows the columns each entry must carry.
+> **Program status:** the activation seat is recorded below; further Orchestrators appear when SRA Governance executes an `Admit` action (2.3.1). The table shows the columns each entry must carry.
 
 | # | Orchestrator | Identity (`orch`) | Payout wallet | Status | Admitted (quarter / epoch) | Declaration | Registered (payer, operator) pairs |
 | :-- | :-- | :-- | :-- | :-- | :-- | :-- | :-- |
-| 1 | Orch_1 | 0x97A90f5696be5E3C8d3752C92Adac287c2b4484e | 0x97A90f5696be5E3C8d3752C92Adac287c2b4484e | Approved | NA | NA | NA |
+| 1 | Initial (activation seat) | 0x97A90f5696be5E3C8d3752C92Adac287c2b4484e | 0x97A90f5696be5E3C8d3752C92Adac287c2b4484e | Active | quarter 1 | TBD (Policy 6 declaration on activation) | — |
 
 **Per-Orchestrator entry template**
 
@@ -448,8 +453,9 @@ The threat model rests on the two-Safes rule: no single Safe can make a change b
 ### 2.5.2 A whole Safe compromised (internal threshold reached by an attacker)
 
 1. Nothing binds from one Safe alone. A hold (where one exists) starts only after both Safes approve. One Safe can only submit a task; the `Submitted` event carries the `taskId` (a hash), not the full content. The other Safe’s remedy is `veto(taskId)` on that half-approved or held task. Repeated resubmission is publicly visible; the attacker cannot bind a change silently. On the SWA side, a malicious discretionary write also lacks its required published FIP, making the objection case unambiguous.
-2. The tier is treated as frozen (halted/suspended), and frozen consequences are bounded: registry frozen means payments and `SetShares` continue; SWA frozen means discretionary changes stop while the ramp and the gate continue through the permissionless crank.
-3. Exit: replace the compromised Safe address. This requires both Safes, so if the compromised Safe obstructs, the FIP backstop applies (2.5.3).
+2. **Task register (off-chain).** Pending tasks never expire on-chain (`UnanimousGovernance`), and `Submitted` names only the `taskId` hash. Before the first on-chain approval of any governance action, open an issue in this repository that records the exact calldata and the expected `taskId` (= `keccak256(msg.data)`). That issue is the human-readable register entry the hash alone cannot provide.
+3. The tier is treated as frozen (halted/suspended), and frozen consequences are bounded: registry frozen means payments and `SetShares` continue; SWA frozen means discretionary changes stop while the ramp and the gate continue through the permissionless crank.
+4. Exit: replace the compromised Safe address. This requires both Safes, so if the compromised Safe obstructs, the FIP backstop applies (2.5.3).
 
 ### 2.5.3 Replacing a registered Safe
 
